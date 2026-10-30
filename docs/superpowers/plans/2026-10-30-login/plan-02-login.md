@@ -4,9 +4,9 @@
 
 **Goal:** Build the React login UI (login card, welcome page, session restore, logout) against the backend from plan 01.
 
-**Architecture:** A Vite React app in `frontend/` with no router. Small pure modules (`validation`, `storage`, `api`) feed a `LoginPage` component that takes its submit handler as a prop, and an `AuthProvider` that owns session state (`loading`, `anonymous`, `authenticated`). `App` picks the view from that state. Tests run on `bun:test` with happy-dom and React Testing Library.
+**Architecture:** A Vite React app in `frontend/` with no router. Small pure modules (`validation`, `storage`, `api`) feed a `LoginPage` component that takes its submit handler as a prop, and an `AuthProvider` that owns session state (`loading`, `anonymous`, `authenticated`). `App` picks the view from that state. Tests run on Vitest with jsdom and React Testing Library.
 
-**Tech Stack:** React 18, Vite, plain CSS with variable tokens, Bun test runner, happy-dom, `@testing-library/react`.
+**Tech Stack:** React 18, Vite, plain CSS with variable tokens, Vitest, jsdom, `@testing-library/react`.
 
 **Spec:** `docs/superpowers/specs/2026-10-30-login-design.md`
 
@@ -20,7 +20,7 @@
 - Submit button label `Sign in`, loading label `Signing in…`; password toggle names `Show password` / `Hide password` with `aria-pressed`.
 - Field errors use `aria-invalid` and `aria-describedby`; form-level messages use `role="alert"`.
 - Styling: tokens on `:root` (`--bg`, `--surface`, `--text`, `--muted`, `--primary`, `--primary-hover`, `--danger`, `--border`, `--radius` 12px, `--space-*`), a `prefers-color-scheme: dark` override, card `max-width: 400px`, 16px gutter under 480px.
-- Root checks must pass from the repo root: `bun run typecheck`, `bun run lint`, `bun test`. Tests import from `bun:test`.
+- Root checks must pass from the repo root: `npm run typecheck`, `npm run lint`, `npm test`. Tests import from `vitest`.
 
 ## Review Focus
 
@@ -39,10 +39,9 @@
 | `package.json` (modify) | Add `frontend` to workspaces |
 | `tsconfig.json` (modify) | Include `frontend/src` and `frontend/test-setup.js`, add `vite/client` and DOM lib |
 | `eslint.config.js` (modify) | Add React plugin rules and browser globals for `frontend/` |
-| `bunfig.toml` (modify) | Preload `./frontend/test-setup.js` |
 | `frontend/package.json` | Frontend dependencies and scripts |
-| `frontend/index.html`, `vite.config.js`, `.env.example` | Vite entry, config, `VITE_API_URL` |
-| `frontend/test-setup.js` | happy-dom registration, jest-dom matchers, RTL cleanup |
+| `frontend/index.html`, `vite.config.js`, `.env.example` | Vite entry, Vite and Vitest config (jsdom, setup file), `VITE_API_URL` |
+| `frontend/test-setup.js` | jest-dom matchers, RTL cleanup |
 | `frontend/src/config.js` | `API_URL` |
 | `frontend/src/validation.js` | `normalizeEmail`, `validateEmail`, `validatePassword` |
 | `frontend/src/storage.js` | `getToken`, `setToken`, `clearToken` |
@@ -58,7 +57,7 @@
 
 **Files:**
 - Create: `frontend/package.json`, `frontend/index.html`, `frontend/vite.config.js`, `frontend/.env.example`, `frontend/test-setup.js`, `frontend/src/config.js`, `frontend/src/validation.js`, `frontend/src/storage.js`, `frontend/src/api.js`
-- Modify: `package.json`, `tsconfig.json`, `eslint.config.js`, `bunfig.toml`
+- Modify: `package.json`, `tsconfig.json`, `eslint.config.js`
 - Test: `frontend/src/validation.test.js`, `frontend/src/storage.test.js`, `frontend/src/api.test.js`
 
 **Interfaces:**
@@ -68,25 +67,20 @@
 - [ ] **Step 1: Read the references.** Read spec sections "Frontend structure", "Session behaviour" and "Login screen behaviour", and `backend/src/routes/auth.js` for the response shapes.
 
 - [ ] **Step 2: Scaffold the package and root wiring.**
-  - `frontend/package.json`: `"type": "module"`, dependencies `react`, `react-dom`, dev dependencies `vite`, `@vitejs/plugin-react`, `happy-dom`, `@happy-dom/global-registrator`, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`, scripts `"dev": "vite"`, `"build": "vite build"`, `"test": "bun test"`.
-  - `frontend/index.html` mounts `#root` and loads `/src/main.jsx`; `vite.config.js` uses `@vitejs/plugin-react`; `frontend/.env.example` holds `VITE_API_URL=http://localhost:4000`.
+  - `frontend/package.json`: `"type": "module"`, dependencies `react`, `react-dom`, dev dependencies `vite`, `@vitejs/plugin-react`, `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`, scripts `"dev": "vite"`, `"build": "vite build"`, `"test": "vitest run"`.
+  - `frontend/index.html` mounts `#root` and loads `/src/main.jsx`; `vite.config.js` uses `@vitejs/plugin-react` and sets `test: { environment: "jsdom", setupFiles: ["./test-setup.js"] }`; `frontend/.env.example` holds `VITE_API_URL=http://localhost:4000`.
   - Root `package.json`: add `"frontend"` to `workspaces`; add dev dependencies `eslint-plugin-react`, `@types/react`, `@types/react-dom`.
   - `tsconfig.json`: add `frontend/src` and `frontend/test-setup.js` to `include`, `jsx` `react-jsx`, `lib` `["es2022", "dom"]`, and `"vite/client"` to `types`.
   - `eslint.config.js`: add a block for `frontend/**/*.{js,jsx}` with `eslint-plugin-react` recommended and jsx-runtime configs, browser globals, and `react/prop-types` off.
-  - `bunfig.toml`: `[test]` with `preload = ["./frontend/test-setup.js"]`.
-  - Run `bun install`.
+  - Run `npm install` at the repo root.
 
-- [ ] **Step 3: Write `frontend/test-setup.js`.** Registration must happen before Testing Library is imported, and static imports are hoisted, so use dynamic imports:
+- [ ] **Step 3: Write `frontend/test-setup.js`.**
 
 ```js
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { expect, afterEach } from "bun:test";
+import "@testing-library/jest-dom/vitest";
+import { afterEach } from "vitest";
+import { cleanup } from "@testing-library/react";
 
-GlobalRegistrator.register();
-
-const matchers = await import("@testing-library/jest-dom/matchers");
-const { cleanup } = await import("@testing-library/react");
-expect.extend(matchers);
 afterEach(() => cleanup());
 ```
 
@@ -113,11 +107,11 @@ it("email_format_errors", () => {
 | `clear_removes_token` | after `clearToken()`, `getToken()` is `null` |
 | `survives_storage_throwing` | with the throwing stub, `getToken()` is `null` and `setToken("x")` and `clearToken()` do not throw |
 
-`api.test.js` (mock with `spyOn(globalThis, "fetch")`, restore in `afterEach`):
+`api.test.js` (mock with `vi.spyOn(globalThis, "fetch")`, restore with `vi.restoreAllMocks()` in `afterEach`):
 
 ```js
 it("login_posts_json_and_returns_payload", async () => {
-  const spy = spyOn(globalThis, "fetch").mockResolvedValue(
+  const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(JSON.stringify({ token: "t", user: { id: "1", email: "a@b.co" } }), { status: 200 }),
   );
   const result = await login({ email: "a@b.co", password: "Password123!" });
@@ -136,11 +130,11 @@ it("login_posts_json_and_returns_payload", async () => {
 | `me_sends_bearer_header_and_returns_user` | fetch resolves 200 `{ user: { id: "1", email: "a@b.co" } }` | `init.headers.Authorization` is `"Bearer tok"`, result is the user |
 | `me_throws_api_error_on_401` | fetch resolves 401 `{ error: "Unauthorized" }` | rejects with `ApiError`, `status` 401 |
 
-- [ ] **Step 5: Run to verify failure.** Run `bun test frontend/src`. Expected: fails with `Cannot find module './validation.js'` (and the same for `storage.js`, `api.js`).
+- [ ] **Step 5: Run to verify failure.** Run `npx vitest run src` from `frontend/`. Expected: fails with `Failed to load url ./validation.js` (and the same for `storage.js`, `api.js`).
 
 - [ ] **Step 6: Implement the modules.** `config.js` exports `API_URL`. `validation.js`, `storage.js` and `api.js` follow the Interfaces block. `api.js` sends `Content-Type: application/json`; a non-OK response throws `new ApiError(status, body.fields)`; a rejected `fetch` throws `new ApiError(0)`.
 
-- [ ] **Step 7: Run to verify pass.** Run `bun test`, `bun run typecheck`, `bun run lint` from the repo root. Expected: 45 tests pass (34 backend, 11 frontend), typecheck and lint exit 0. If the backend suites fail only because of the happy-dom preload, report that as a blocker instead of working around it.
+- [ ] **Step 7: Run to verify pass.** Run `npm test`, `npm run typecheck`, `npm run lint` from the repo root. Expected: 45 tests pass (34 backend, 11 frontend), typecheck and lint exit 0.
 
 ### Task 2: Login form and styling
 
@@ -158,7 +152,7 @@ it("login_posts_json_and_returns_payload", async () => {
 
 ```js
 it("shows_inline_errors_and_sends_no_request_when_invalid", async () => {
-  const onSubmit = mock(() => Promise.resolve());
+  const onSubmit = vi.fn(() => Promise.resolve());
   render(<LoginPage onSubmit={onSubmit} />);
   await userEvent.type(screen.getByLabelText("Email"), "nope");
   await userEvent.type(screen.getByLabelText("Password"), "short");
@@ -184,7 +178,7 @@ Remaining tests (valid input is `alice@example.com` / `Password123!`; "pending" 
 | `clears_field_error_on_edit` | submit invalid email, then type a character in the email field | the email error text is gone |
 | `shows_notice_with_retry_button` | render with `notice="Can't reach server"` and `onRetry` mock | text visible; clicking `Retry` calls `onRetry` once |
 
-- [ ] **Step 3: Run to verify failure.** Run `bun test frontend/src/components/LoginPage.test.jsx`. Expected: fails with `Cannot find module './LoginPage.jsx'`.
+- [ ] **Step 3: Run to verify failure.** Run `npx vitest run src/components/LoginPage.test.jsx` from `frontend/`. Expected: fails with `Failed to load url ./LoginPage.jsx`.
 
 - [ ] **Step 4: Implement `PasswordField` in `frontend/src/components/PasswordField.jsx`.** Label `Password`, `type` toggled by internal state, a button named `Show password` / `Hide password` with `aria-pressed`, `autocomplete="current-password"`, error text in an element with id `${id}-error` referenced by `aria-describedby`.
 
@@ -192,7 +186,7 @@ Remaining tests (valid input is `alice@example.com` / `Password123!`; "pending" 
 
 - [ ] **Step 6: Write `frontend/src/styles.css`** per the "Visual design" spec section and Global Constraints: tokens, dark mode override, centered card, red error text and input border, dimmed button with a CSS spinner while loading, focus ring, narrow-screen gutter.
 
-- [ ] **Step 7: Run to verify pass.** Run `bun test`, `bun run typecheck`, `bun run lint` from the repo root. Expected: 55 tests pass (34 backend, 11 + 10 frontend), typecheck and lint exit 0.
+- [ ] **Step 7: Run to verify pass.** Run `npm test`, `npm run typecheck`, `npm run lint` from the repo root. Expected: 55 tests pass (34 backend, 11 + 10 frontend), typecheck and lint exit 0.
 
 ### Task 3: Session state, app shell and README
 
@@ -207,7 +201,7 @@ Remaining tests (valid input is `alice@example.com` / `Password123!`; "pending" 
 
 - [ ] **Step 1: Read the references.** Read spec section "Session behaviour" and `frontend/src/components/LoginPage.jsx` for its props.
 
-- [ ] **Step 2: Write the failing tests** in `App.test.jsx`. Each test renders `<AuthProvider><App /></AuthProvider>`, seeds `sessionStorage` when needed, and mocks `fetch` with `spyOn(globalThis, "fetch")` routing by URL suffix (`/api/auth/login`, `/api/auth/me`). Example:
+- [ ] **Step 2: Write the failing tests** in `App.test.jsx`. Each test renders `<AuthProvider><App /></AuthProvider>`, seeds `sessionStorage` when needed, and mocks `fetch` with `vi.spyOn(globalThis, "fetch")` routing by URL suffix (`/api/auth/login`, `/api/auth/me`). Example:
 
 ```js
 it("restores_session_from_stored_token", async () => {
@@ -234,16 +228,16 @@ it("restores_session_from_stored_token", async () => {
 | `login_succeeds_when_storage_throws` | `globalThis.sessionStorage` replaced by a throwing stub (restored afterwards); login 200 | welcome page still shown |
 | `logout_clears_token_and_returns_to_login` | authenticated via restore | click `Logout`: login form shown, `getToken()` is `null` |
 
-- [ ] **Step 3: Run to verify failure.** Run `bun test frontend/src/App.test.jsx`. Expected: fails with `Cannot find module './App.jsx'`.
+- [ ] **Step 3: Run to verify failure.** Run `npx vitest run src/App.test.jsx` from `frontend/`. Expected: fails with `Failed to load url ./App.jsx`.
 
 - [ ] **Step 4: Implement `AuthProvider` and `useAuth` in `frontend/src/auth/AuthContext.jsx`.** On mount: no token gives `anonymous`; a token gives `loading`, then `me(token)`: success sets `authenticated`, `ApiError` 401 clears the token and sets `anonymous`, any other failure sets `anonymous` with `notice` `"Can't reach server"` and keeps the token. `login` calls the API, then stores the token (failure to store is ignored) and sets the user. `retry` re-runs the restore. `logout` clears the token and returns to `anonymous`.
 
 - [ ] **Step 5: Implement `WelcomePage`, `App` and `main.jsx`.** `App` renders `Loading…` while `loading`, `WelcomePage` when `authenticated`, otherwise `LoginPage` with `onSubmit={login}`, `notice` and `onRetry={retry}`. `main.jsx` imports `./styles.css` and mounts `<AuthProvider><App /></AuthProvider>` into `#root`.
 
-- [ ] **Step 6: Run to verify pass.** Run `bun test`, `bun run typecheck`, `bun run lint` from the repo root. Expected: 65 tests pass (34 backend, 31 frontend: 11 + 10 + 10), typecheck and lint exit 0.
+- [ ] **Step 6: Run to verify pass.** Run `npm test`, `npm run typecheck`, `npm run lint` from the repo root. Expected: 65 tests pass (34 backend, 31 frontend: 11 + 10 + 10), typecheck and lint exit 0.
 
-- [ ] **Step 7: Verify the production build.** Run `cd frontend && bunx vite build`. Expected: build succeeds and writes `frontend/dist`.
+- [ ] **Step 7: Verify the production build.** Run `npm run build -w frontend`. Expected: build succeeds and writes `frontend/dist`.
 
-- [ ] **Step 8: Update `README.md`.** Fill the "Frontend" heading: `cd frontend && bun run dev`, `VITE_API_URL`, the default dev URL `http://localhost:5173`, and a short "how to log in" line pointing at the seeded users.
+- [ ] **Step 8: Update `README.md`.** Fill the "Frontend" heading: `npm run dev -w frontend`, `VITE_API_URL`, the default dev URL `http://localhost:5173`, and a short "how to log in" line pointing at the seeded users.
 
 Next plan: none

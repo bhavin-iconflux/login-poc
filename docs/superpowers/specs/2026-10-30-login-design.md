@@ -41,13 +41,12 @@ Reload: token in sessionStorage -> api.me --GET /api/auth/me (Bearer)--> user or
 
 ### 1. Repo layout and tooling
 
-A Bun workspace with a root `package.json` and two packages, each with its own `package.json`, in plain JavaScript (ES modules, `"type": "module"`). The project's checks run at the repo root: `bun run typecheck`, `bun run lint`, `bun test`.
+An npm workspace with a root `package.json` and two packages, each with its own `package.json`, in plain JavaScript (ES modules, `"type": "module"`). Checks run at the repo root: `npm run typecheck`, `npm run lint`, `npm test`.
 
-- Root: `package.json` with `"workspaces": ["backend", "frontend"]` and scripts `typecheck` (`tsc --noEmit`) and `lint` (`eslint .`). Dev dependencies: `typescript`, `eslint`, `@eslint/js`, `eslint-plugin-react`, `globals`, `@types/react`, `@types/react-dom`, `@types/express`, `@types/bun`. `tsconfig.json` sets `allowJs`, `checkJs`, `noEmit`, `jsx: "react-jsx"` and includes `backend/src`, `backend/test`, `frontend/src`. `eslint.config.js` uses the flat config with the recommended JS and React rules. `bunfig.toml` sets `[test] preload = ["./frontend/test-setup.js"]`.
-- `backend/`: Node, Express, `jsonwebtoken`, `bcryptjs`, `cors`, `zod`; dev dependency `supertest`. Scripts: `start`, `dev` (`node --watch src/server.js`), `test` (`bun test`). The code runs on Node; only the tests run on Bun.
-- `frontend/`: React 18 with Vite; dev dependencies `happy-dom`, `@happy-dom/global-registrator`, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`. Scripts: `dev`, `build`, `test` (`bun test`). `frontend/test-setup.js` registers happy-dom globals, extends `expect` with the jest-dom matchers and runs RTL `cleanup` after each test.
-- All tests import `describe`, `it`, `expect`, `mock`, `spyOn` from `bun:test`. A test that mocks `fetch` uses `spyOn(globalThis, "fetch")`.
-- The preload registers a DOM for every test file, including backend ones, which is harmless for them.
+- Root: `package.json` with `"workspaces": ["backend", "frontend"]` and scripts `typecheck` (`tsc --noEmit`), `lint` (`eslint .`) and `test` (`npm test --workspaces --if-present`). Dev dependencies: `typescript`, `eslint`, `@eslint/js`, `eslint-plugin-react`, `globals`, `@types/react`, `@types/react-dom`, `@types/express`, `@types/node`. `tsconfig.json` sets `allowJs`, `checkJs`, `noEmit`, `jsx: "react-jsx"` and includes `backend/src`, `backend/test`, `frontend/src`. `eslint.config.js` uses the flat config with the recommended JS and React rules.
+- `backend/`: Node, Express, `jsonwebtoken`, `bcryptjs`, `cors`, `zod`; dev dependencies `vitest`, `supertest`. Scripts: `start`, `dev` (`node --watch src/server.js`), `test` (`vitest run`).
+- `frontend/`: React 18 with Vite; dev dependencies `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`. Scripts: `dev`, `build`, `test` (`vitest run`). `vite.config.js` sets `test.environment` to `"jsdom"` and `test.setupFiles` to `["./test-setup.js"]`; `frontend/test-setup.js` loads the jest-dom matchers (`@testing-library/jest-dom/vitest`) and runs RTL `cleanup` after each test.
+- All tests import `describe`, `it`, `expect`, `vi`, `beforeAll`, `afterEach` and the like from `vitest`. A test that mocks `fetch` uses `vi.spyOn(globalThis, "fetch")`.
 
 ### 2. Backend configuration (`backend/src/config.js`)
 
@@ -168,7 +167,7 @@ Clean and minimal. Tokens on `:root`: `--bg`, `--surface`, `--text`, `--muted`, 
 
 ## Testing
 
-All tests use Bun's runner (`bun:test`). Commands, from the repo root: `bun test` (every suite), `bun run typecheck`, `bun run lint`. A single package: `cd backend && bun test` or `cd frontend && bun test`.
+All tests use Vitest. Commands, from the repo root: `npm test` (every suite), `npm run typecheck`, `npm run lint`. A single package: `npm test -w backend` or `npm test -w frontend`.
 
 Backend (`backend/test/`):
 
@@ -188,7 +187,7 @@ Frontend (`frontend/src/**/*.test.jsx`, `fetch` mocked):
 
 New files:
 
-- `package.json`, `tsconfig.json`, `eslint.config.js`, `bunfig.toml`
+- `package.json`, `tsconfig.json`, `eslint.config.js`
 - `frontend/test-setup.js`
 - `backend/package.json`, `backend/.env.example`
 - `backend/src/config.js`, `users.js`, `validation.js`, `auth.js`, `app.js`, `server.js`, `routes/auth.js`
@@ -225,7 +224,7 @@ Modified: `README.md` (how to run both apps, test users and their passwords, env
 - An expired token on reload returns the user to the login screen silently; an unreachable server shows "Can't reach server" with a working Retry and keeps the token.
 - Logout clears the token and returns to the login screen.
 - The styling is a centered card using CSS-variable tokens, with a dark-mode variant and distinct error, loading and disabled states.
-- `bun run typecheck`, `bun run lint` and `bun test` all pass from the repo root, and `bun test` runs the backend and frontend suites.
+- `npm run typecheck`, `npm run lint` and `npm test` all pass from the repo root, and `npm test` runs the backend and frontend suites.
 - The README explains how to run both apps and the three checks.
 
 ## Out of scope
@@ -241,7 +240,7 @@ Signup, password reset, email verification, MFA, remember-me, lockout, social lo
 - How are ports, the JWT secret and the CORS origin configured? Options: env vars with dev defaults, hard-coded, env vars without defaults, Vite dev proxy. Chosen: env vars with dev defaults (PORT 4000, CORS_ORIGIN http://localhost:5173, JWT_SECRET dev default that is refused in production, VITE_API_URL default http://localhost:4000, .env.example, no proxy). Decided by: user
 - How are expired tokens and email matching handled? Options: silent clear on 401 only with normalized emails and a dummy-hash compare, clear on any failure, case-sensitive with no dummy hash, show a session-expired message. Chosen: on 401 from /me clear the token silently; on network or 5xx keep the token and show a small "Can't reach server" notice; trim and lowercase emails on client and server; always run bcrypt compare with a dummy hash for unknown emails. Decided by: user
 - How much automated testing? Options: focused backend and frontend tests, backend only, plus Playwright, minimal smoke. Chosen: focused tests on both sides, no browser end-to-end tests. Decided by: user
-- How do the project's root checks (`bun run typecheck`, `bun run lint`, `bun test`) work? Options: Bun's test runner everywhere with a root workspace, Vitest with root scripts, Vitest with the registry checks changed. Chosen: Bun's test runner everywhere (`bun:test`, happy-dom preload via `bunfig.toml`), a root workspace `package.json` with `typecheck` (tsc with checkJs) and `lint` (ESLint). Decided by: user
+- Which runtime and test runner do the checks use? Options: Bun's test runner with a root workspace, Vitest with Bun-run scripts, Node and Vitest with npm workspaces. Chosen: Node and Vitest with an npm workspace; Bun is not installed on the build machine. Root scripts `typecheck` (tsc with checkJs), `lint` (ESLint) and `test` (both packages). Decided by: user
 - Navigation after login? Chosen: state-based view switch with no router, since there are only two views. Decided by: call
 - Retry control for an unreachable server on reload? Chosen: a Retry button on the notice. Decided by: call
 - Backend module system and bcrypt library? Chosen: ES modules and `bcryptjs` (pure JS, no native build). Decided by: call

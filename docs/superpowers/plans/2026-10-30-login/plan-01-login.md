@@ -2,26 +2,26 @@
 
 > **Executor:** the factory driver runs this plan using superpowers:subagent-driven-development, with one fresh factory-builder implementer per task and no per-task review. The driver keeps the ledger, makes the commits and runs the final review.
 
-**Goal:** Stand up the root Bun workspace and the Express backend with `POST /api/auth/login` and `GET /api/auth/me`.
+**Goal:** Stand up the root npm workspace and the Express backend with `POST /api/auth/login` and `GET /api/auth/me`.
 
-**Architecture:** A Bun workspace at the repo root (checks run there) with a `backend/` package. The backend is plain ES-module JavaScript on Node: `createApp({ config, userStore })` builds the Express app, pure modules (config, users, validation, auth helpers) sit under it, and tests run on `bun:test` with `supertest`.
+**Architecture:** An npm workspace at the repo root (checks run there) with a `backend/` package. The backend is plain ES-module JavaScript on Node: `createApp({ config, userStore })` builds the Express app, pure modules (config, users, validation, auth helpers) sit under it, and tests run on Vitest with `supertest`.
 
-**Tech Stack:** Node, Express, `jsonwebtoken`, `bcryptjs`, `cors`, `zod`, Bun test runner, TypeScript (`checkJs` only), ESLint.
+**Tech Stack:** Node, Express, `jsonwebtoken`, `bcryptjs`, `cors`, `zod`, Vitest, TypeScript (`checkJs` only), ESLint.
 
 **Spec:** `docs/superpowers/specs/2026-10-30-login-design.md`
 
 ## Global Constraints
 
 - Plain JavaScript, ES modules (`"type": "module"`); no TypeScript source files.
-- Root checks must pass from the repo root: `bun run typecheck`, `bun run lint`, `bun test`.
-- Tests import `describe`, `it`, `expect`, `mock`, `spyOn` from `bun:test`.
+- Root checks must pass from the repo root: `npm run typecheck`, `npm run lint`, `npm test`.
+- Tests import `describe`, `it`, `expect`, `vi`, `beforeAll` and the like from `vitest`.
 - Passwords stored only as bcrypt hashes (cost 10, `bcryptjs`); no plaintext in logs, errors or responses.
 - Login failure body is `{ "error": "Invalid email or password" }` for both unknown email and wrong password.
 - JWT: HS256 only, payload `{ sub, email }`, expires in `"1h"`, sent as `Authorization: Bearer <token>`.
 - Ports and origins: `PORT` default `4000`, `CORS_ORIGIN` default `http://localhost:5173`, `JWT_SECRET` default `DEV_JWT_SECRET` (`"dev-only-insecure-secret"`), refused in production.
 - JSON body limit `10kb`; CORS allows only `CORS_ORIGIN`.
 - No runtime dependency beyond `express`, `jsonwebtoken`, `bcryptjs`, `cors`, `zod`.
-- This plan creates only the backend side of the workspace. The `frontend` workspace entry, the frontend `tsconfig` include and the `bunfig.toml` preload are added by plan 02, because `frontend/` does not exist yet.
+- This plan creates only the backend side of the workspace. The `frontend` workspace entry, and the frontend `tsconfig` include are added by plan 02, because `frontend/` does not exist yet.
 
 ## Review Focus
 
@@ -39,8 +39,7 @@
 |------|----------------|
 | `package.json` | Root workspace (`backend` only for now), `typecheck` and `lint` scripts, shared dev dependencies |
 | `tsconfig.json` | `checkJs` type checking for `backend/src` and `backend/test` |
-| `eslint.config.js` | Flat config, recommended JS rules, Node and Bun globals |
-| `bunfig.toml` | Bun test settings (no preload yet) |
+| `eslint.config.js` | Flat config, recommended JS rules, Node globals |
 | `.gitignore` | `node_modules`, `dist`, `.env` |
 | `backend/package.json` | Backend dependencies and scripts |
 | `backend/.env.example` | `PORT`, `CORS_ORIGIN`, `JWT_SECRET` |
@@ -57,7 +56,7 @@
 ### Task 1: Root tooling and backend config
 
 **Files:**
-- Create: `package.json`, `tsconfig.json`, `eslint.config.js`, `bunfig.toml`, `.gitignore`, `backend/package.json`, `backend/.env.example`, `backend/src/config.js`
+- Create: `package.json`, `tsconfig.json`, `eslint.config.js`, `.gitignore`, `backend/package.json`, `backend/.env.example`, `backend/src/config.js`
 - Test: `backend/test/config.test.js`
 
 **Interfaces:**
@@ -69,7 +68,7 @@
 - [ ] **Step 2: Write the failing tests** in `backend/test/config.test.js`:
 
 ```js
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect } from "vitest";
 import { loadConfig, DEV_JWT_SECRET } from "../src/config.js";
 
 describe("loadConfig", () => {
@@ -102,21 +101,21 @@ describe("loadConfig", () => {
 });
 ```
 
-- [ ] **Step 3: Run to verify failure.** Run `bun test backend/test/config.test.js` from the repo root. Expected: fails with `Cannot find module '../src/config.js'`.
+- [ ] **Step 3: Run to verify failure.** Run `npx vitest run test/config.test.js` from `backend/` (after the dependencies are installed in step 5; before that, run the same command from the repo root after `npm install`). Expected: fails with `Failed to load url ../src/config.js`.
 
 - [ ] **Step 4: Implement `loadConfig` and `DEV_JWT_SECRET` in `backend/src/config.js`.** Signature as in Interfaces; `port` is `Number(env.PORT ?? 4000)`; throw `new Error("JWT_SECRET must be set in production")` when `nodeEnv === "production"` and the secret is unset or equals `DEV_JWT_SECRET`.
 
 - [ ] **Step 5: Scaffold the workspace and install.**
-  - `package.json`: `"private": true`, `"type": "module"`, `"workspaces": ["backend"]`, scripts `"typecheck": "tsc --noEmit"` and `"lint": "eslint ."`. Dev dependencies: `typescript`, `eslint`, `@eslint/js`, `globals`, `@types/bun`, `@types/node`, `@types/express`, `@types/cors`, `@types/jsonwebtoken`, `@types/supertest`.
-  - `tsconfig.json`: `target` `es2022`, `module` `esnext`, `moduleResolution` `bundler`, `allowJs`, `checkJs`, `noEmit`, `skipLibCheck`, `strict` false, `types` `["bun"]`, `include` `["backend/src", "backend/test"]`.
+  - `package.json`: `"private": true`, `"type": "module"`, `"workspaces": ["backend"]`, scripts `"typecheck": "tsc --noEmit"` and `"lint": "eslint ."`. Dev dependencies: `typescript`, `eslint`, `@eslint/js`, `globals`, `vitest`, `@types/node`, `@types/express`, `@types/cors`, `@types/jsonwebtoken`, `@types/supertest`.
+  - `tsconfig.json`: `target` `es2022`, `module` `esnext`, `moduleResolution` `bundler`, `allowJs`, `checkJs`, `noEmit`, `skipLibCheck`, `strict` false, `types` `["node"]`, `include` `["backend/src", "backend/test"]`.
   - `eslint.config.js`: flat config exporting `@eslint/js` recommended plus a block setting `languageOptions.globals` to `globals.node`, ignoring `**/dist` and `**/node_modules`.
-  - `bunfig.toml`: a `[test]` table with no preload (plan 02 adds it).
   - `.gitignore`: `node_modules`, `dist`, `.env`.
-  - `backend/package.json`: `"type": "module"`, dependencies `express`, `jsonwebtoken`, `bcryptjs`, `cors`, `zod`, dev dependency `supertest`, scripts `"start": "node src/server.js"`, `"dev": "node --watch src/server.js"`, `"test": "bun test"`.
+  - `backend/package.json`: `"type": "module"`, dependencies `express`, `jsonwebtoken`, `bcryptjs`, `cors`, `zod`, dev dependencies `vitest`, `supertest`, scripts `"start": "node src/server.js"`, `"dev": "node --watch src/server.js"`, `"test": "vitest run"`.
   - `backend/.env.example`: `PORT=4000`, `CORS_ORIGIN=http://localhost:5173`, `JWT_SECRET=change-me`.
-  - Run `bun install` at the repo root.
+  - Add root script `"test": "npm test --workspaces --if-present"`.
+  - Run `npm install` at the repo root.
 
-- [ ] **Step 6: Verify.** Run `bun test`, `bun run typecheck`, `bun run lint` from the repo root. Expected: 4 tests pass, typecheck and lint exit 0.
+- [ ] **Step 6: Verify.** Run `npm test`, `npm run typecheck`, `npm run lint` from the repo root. Expected: 4 tests pass, typecheck and lint exit 0.
 
 ### Task 2: User store and validation
 
@@ -165,13 +164,13 @@ it("normalizes_email_case_and_whitespace", () => {
 | `does_not_trim_password` | `{ email: "a@b.co", password: "  pass  " }` | `ok` true, `data.password` is `"  pass  "` |
 | `non_string_fields_report_field_errors` | `{ email: 123, password: ["x"] }` | `ok` false, `fields.email` and `fields.password` both set |
 
-- [ ] **Step 3: Run to verify failure.** Run `bun test backend/test/users.test.js backend/test/validation.test.js`. Expected: fails with `Cannot find module '../src/users.js'` and `'../src/validation.js'`.
+- [ ] **Step 3: Run to verify failure.** Run `npx vitest run test/users.test.js test/validation.test.js` from `backend/`. Expected: fails with `Failed to load url ../src/users.js` and `../src/validation.js`.
 
 - [ ] **Step 4: Implement `backend/src/users.js`.** Seed users: `{ id: "1", email: "alice@example.com", password: "Password123!" }`, `{ id: "2", email: "bob@example.com", password: "Password456!" }`. Hash with `bcryptjs` cost 10, keep only hashes, build one dummy hash at creation; `verifyPassword(undefined, pw)` compares against the dummy hash and returns `false`.
 
 - [ ] **Step 5: Implement `backend/src/validation.js`.** Use a `zod` schema: email is a string, trimmed, lowercased, `.email()`; password is a string with `.min(8)`, untrimmed. Map zod issues to the exact spec messages (`"Email is required"` for a missing or non-string email, `"Password is required"` likewise). Treat a non-object body as `{}`.
 
-- [ ] **Step 6: Run to verify pass.** Run `bun test` from the repo root. Expected: 15 pass (4 config, 5 users, 6 validation); `bun run typecheck` and `bun run lint` exit 0.
+- [ ] **Step 6: Run to verify pass.** Run `npm test` from the repo root. Expected: 15 pass (4 config, 5 users, 6 validation); `npm run typecheck` and `npm run lint` exit 0.
 
 ### Task 3: Auth helpers, routes, app, server, README
 
@@ -222,7 +221,7 @@ Remaining tests, using a `loginToken()` helper that logs in as alice:
 | `cors_omits_header_for_other_origin` | login with `Origin: http://evil.test` | no `access-control-allow-origin` header |
 | `responses_never_contain_password_or_hash` | successful and failed login | `JSON.stringify(res.body)` contains neither `"Password123!"` nor `"$2"` |
 
-- [ ] **Step 3: Run to verify failure.** Run `bun test backend/test/auth.test.js`. Expected: fails with `Cannot find module '../src/app.js'`.
+- [ ] **Step 3: Run to verify failure.** Run `npx vitest run test/auth.test.js` from `backend/`. Expected: fails with `Failed to load url ../src/app.js`.
 
 - [ ] **Step 4: Implement `signToken` and `requireAuth` in `backend/src/auth.js`.** `signToken` signs `{ sub: user.id, email: user.email }` with `config.jwtSecret`, `algorithm: "HS256"`, `expiresIn: config.jwtExpiresIn`. `requireAuth` parses the `Bearer` scheme, verifies with `algorithms: ["HS256"]`, loads the user with `userStore.findById(sub)`, and answers `401 { "error": "Unauthorized" }` on any failure.
 
@@ -232,10 +231,10 @@ Remaining tests, using a `loginToken()` helper that logs in as alice:
 
 - [ ] **Step 7: Implement `backend/src/server.js`.** Call `loadConfig()`, `await createUserStore()`, `createApp(...)`, listen on `config.port`, log only the port.
 
-- [ ] **Step 8: Run to verify pass.** Run `bun test`, `bun run typecheck`, `bun run lint` from the repo root. Expected: 34 tests pass (4 config, 5 users, 6 validation, 19 auth), typecheck and lint exit 0.
+- [ ] **Step 8: Run to verify pass.** Run `npm test`, `npm run typecheck`, `npm run lint` from the repo root. Expected: 34 tests pass (4 config, 5 users, 6 validation, 19 auth), typecheck and lint exit 0.
 
 - [ ] **Step 9: Smoke-test the server on Node.** Run `node backend/src/server.js` in the background, then `curl -s -X POST localhost:4000/api/auth/login -H 'Content-Type: application/json' -d '{"email":"alice@example.com","password":"Password123!"}'`. Expected: JSON with `token` and `user`. Stop the server.
 
-- [ ] **Step 10: Update `README.md`.** Replace the placeholder with sections: project overview, how to run the backend (`bun install`, `cd backend && npm run dev` or `node src/server.js`), the env vars table, the seeded test users with their passwords (`alice@example.com` / `Password123!`, `bob@example.com` / `Password456!`), and the three root checks. Leave a "Frontend" heading for plan 02 to fill.
+- [ ] **Step 10: Update `README.md`.** Replace the placeholder with sections: project overview, how to run the backend (`npm install`, `npm run dev -w backend` or `node backend/src/server.js`), the env vars table, the seeded test users with their passwords (`alice@example.com` / `Password123!`, `bob@example.com` / `Password456!`), and the three root checks. Leave a "Frontend" heading for plan 02 to fill.
 
 Next plan: docs/superpowers/plans/2026-10-30-login/plan-02-login.md
