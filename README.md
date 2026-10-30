@@ -4,6 +4,8 @@ A login proof of concept: a Node/Express backend with a JWT login API, and a Rea
 
 ## Backend
 
+Run `npm install` at the repo root first; it installs every workspace.
+
 ```sh
 npm install
 npm run dev -w backend      # or: node backend/src/server.js
