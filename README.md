@@ -35,7 +35,13 @@ Copy `backend/.env.example` for reference; the server reads these from the proce
 
 ## Frontend
 
-_To be added._
+```sh
+npm run dev -w frontend
+```
+
+The app runs at `http://localhost:5173` and talks to the API at `http://localhost:4000`. Set `VITE_API_URL` (see `frontend/.env.example`) to point it elsewhere.
+
+To log in, start the backend and sign in with one of the test users above. Reloading keeps you signed in until the token expires (1 hour); Logout clears it.
 
 ## Checks
 
