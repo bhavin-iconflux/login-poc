@@ -8,7 +8,9 @@
     "noEmit": true,
     "skipLibCheck": true,
     "strict": false,
-    "types": ["node"]
+    "jsx": "react-jsx",
+    "lib": ["es2022", "dom"],
+    "types": ["node", "vite/client"]
   },
-  "include": ["backend/src", "backend/test"]
+  "include": ["backend/src", "backend/test", "frontend/src", "frontend/test-setup.js"]
 }
